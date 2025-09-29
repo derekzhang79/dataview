@@ -112,6 +112,11 @@ check_*.py
 # back目录下的生成文件
 back/check_*.py
 back/test_*.py
+
+# 分析相关的生成文件
+dataanalysis*.py
+
+# SQLite相关文件
 db.sqlite3-journal
 
 # Flask stuff:
