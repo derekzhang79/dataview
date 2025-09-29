@@ -98,6 +98,20 @@ cover/
 *.log
 local_settings.py
 db.sqlite3
+
+# 自动生成的测试文件
+test_*.py
+check_*.py
+
+# 生成的图表文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# back目录下的生成文件
+back/check_*.py
+back/test_*.py
 db.sqlite3-journal
 
 # Flask stuff:
