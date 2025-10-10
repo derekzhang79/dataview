@@ -6,7 +6,7 @@ from openpyxl.styles import Font
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 def highlight_min_values_in_excel(df, output_file):
-    """对Excel文件中如果price的数字比任何bidprice开头的列小，就把price的数字设置为红色字体"""
+    """比较Excel文件中bidprice9、price和bidprice10三列并将最小值标红；如有0值则忽略并比较另外两列；确保每行最多只有一个标红"""
     # 使用ExcelWriter和openpyxl引擎
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
         # 先将数据写入Excel
@@ -18,80 +18,74 @@ def highlight_min_values_in_excel(df, output_file):
         # 获取列名行索引（第1行）
         header_row = 1
         
-        # 收集price列和所有以bidprice开头的列的索引
+        # 初始化目标列索引
+        bidprice9_col = None
         price_col = None
-        bidprice_cols = []
-        bidprice_column_names = []
+        bidprice10_col = None
         
-        # 查找各列的索引
+        # 查找目标列的索引
         for cell in worksheet[header_row]:
-            if cell.value == 'price':
+            if cell.value == 'bidprice9':
+                bidprice9_col = cell.column
+            elif cell.value == 'price':
                 price_col = cell.column
-            elif isinstance(cell.value, str) and cell.value.startswith('bidprice'):
-                bidprice_cols.append(cell.column)
-                bidprice_column_names.append(cell.value)
+            elif cell.value == 'bidprice10':
+                bidprice10_col = cell.column
         
         # 创建红色字体样式
         red_font = Font(color='FF0000')
         
-        # 从第2行开始遍历数据行（跳过表头）
-        for row in range(2, worksheet.max_row + 1):
-            # 如果找到了price列和至少一个bidprice列
-            if price_col and bidprice_cols:
-                price_cell = worksheet.cell(row=row, column=price_col)
-                
+        # 检查是否找到了所有需要的列
+        if bidprice9_col and price_col and bidprice10_col:
+            # 从第2行开始遍历数据行（跳过表头）
+            for row in range(2, worksheet.max_row + 1):
                 try:
-                    # 尝试获取price值
-                    price_val = float(price_cell.value) if price_cell.value else float('inf')
+                    # 获取三列的值和单元格
+                    bidprice9_cell = worksheet.cell(row=row, column=bidprice9_col)
+                    price_cell = worksheet.cell(row=row, column=price_col)
+                    bidprice10_cell = worksheet.cell(row=row, column=bidprice10_col)
                     
-                    # 检查price是否小于所有bidprice列的值
-                    is_price_smallest = True
+                    # 尝试将值转换为数字
+                    try:
+                        bidprice9_val = float(bidprice9_cell.value) if bidprice9_cell.value else None
+                    except (ValueError, TypeError):
+                        bidprice9_val = None
                     
-                    for col_idx in bidprice_cols:
-                        bidprice_cell = worksheet.cell(row=row, column=col_idx)
-                        try:
-                            bidprice_val = float(bidprice_cell.value) if bidprice_cell.value else float('-inf')
-                            # 如果price不小于当前bidprice，标记为False并跳出循环
-                            if price_val >= bidprice_val:
-                                is_price_smallest = False
-                                break
-                        except (ValueError, TypeError):
-                            # 如果当前bidprice列的值无法转换为数字，跳过该列
-                            continue
+                    try:
+                        price_val = float(price_cell.value) if price_cell.value else None
+                    except (ValueError, TypeError):
+                        price_val = None
                     
-                    # 如果price小于所有有效的bidprice值，设置为红色
-                    if is_price_smallest:
-                        price_cell.font = red_font
-                except (ValueError, TypeError):
-                    # 如果price值无法转换为数字，跳过
-                    pass
-            
-            # 比较bidprice9和bidprice10（保持原有功能）
-            bidprice9_col = None
-            bidprice10_col = None
-            for i, col_name in enumerate(bidprice_column_names):
-                if col_name == 'bidprice9':
-                    bidprice9_col = bidprice_cols[i]
-                elif col_name == 'bidprice10':
-                    bidprice10_col = bidprice_cols[i]
-            
-            if bidprice9_col and bidprice10_col:
-                bidprice9_cell = worksheet.cell(row=row, column=bidprice9_col)
-                bidprice10_cell = worksheet.cell(row=row, column=bidprice10_col)
-                
-                try:
-                    # 尝试将值转换为数字进行比较
-                    bidprice9_val = float(bidprice9_cell.value) if bidprice9_cell.value else float('inf')
-                    bidprice10_val = float(bidprice10_cell.value) if bidprice10_cell.value else float('inf')
+                    try:
+                        bidprice10_val = float(bidprice10_cell.value) if bidprice10_cell.value else None
+                    except (ValueError, TypeError):
+                        bidprice10_val = None
                     
-                    # 将较小值标记为红色
-                    if bidprice9_val < bidprice10_val:
-                        bidprice9_cell.font = red_font
-                    elif bidprice10_val < bidprice9_val:
-                        bidprice10_cell.font = red_font
-                except (ValueError, TypeError):
-                    # 如果无法比较，跳过
-                    pass
+                    # 创建值和单元格的映射列表，同时排除0值
+                    value_cell_pairs = []
+                    if bidprice9_val is not None and bidprice9_val != 0:
+                        value_cell_pairs.append((bidprice9_val, bidprice9_cell))
+                    if price_val is not None and price_val != 0:
+                        value_cell_pairs.append((price_val, price_cell))
+                    if bidprice10_val is not None and bidprice10_val != 0:
+                        value_cell_pairs.append((bidprice10_val, bidprice10_cell))
+                    
+                    # 如果有至少两个有效的非0值进行比较
+                    if len(value_cell_pairs) >= 2:
+                        # 找出最小值及其对应的单元格
+                        min_val, min_cell = min(value_cell_pairs, key=lambda x: x[0])
+                        # 将最小值标红
+                        min_cell.font = red_font
+                except Exception:
+                    # 安全处理任何异常，确保程序继续运行
+                    continue
+        else:
+            # 如果缺少必要的列，打印警告信息
+            missing_cols = []
+            if not bidprice9_col: missing_cols.append('bidprice9')
+            if not price_col: missing_cols.append('price')
+            if not bidprice10_col: missing_cols.append('bidprice10')
+            print(f"警告: Excel文件中缺少以下必要列: {', '.join(missing_cols)}")
 
 
 def export_mongodb_to_excel():
@@ -238,6 +232,15 @@ def export_mongodb_to_excel():
         print(f"从constprice集合获取价格数据完成：")
         print(f"  成功匹配: {matched_count} 条记录")
         print(f"  未找到匹配: {unmatched_count} 条记录")
+        
+        # 重新排列列的顺序，确保符合要求
+        required_columns = ['name', 'nameid', 'number9', 'price9', 'bidprice9', 'price', 'bidprice10', 'price10', 'number10']
+        # 确保DataFrame中存在的列按照指定顺序排列
+        existing_required_columns = [col for col in required_columns if col in df.columns]
+        # 补充其他可能存在的列
+        remaining_columns = [col for col in df.columns if col not in existing_required_columns]
+        # 重新排列DataFrame的列
+        df = df[existing_required_columns + remaining_columns]
         
         # 导出DataFrame到Excel文件并高亮显示较小值
         print(f"正在导出到Excel文件: {output_file}")

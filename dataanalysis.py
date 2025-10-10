@@ -64,25 +64,51 @@ print("\n数值列统计描述:")
 print(df.describe())
 
 # 数据清洗
-# 处理缺失值和price为0的情况
 df_clean = df.copy()
 
 # 首先检查并报告price为0的情况
 zero_price_count = (df_clean['price'] == 0).sum()
 if zero_price_count > 0:
-    print(f"警告: 发现{zero_price_count}条记录的price列为0，将进行处理")
+    print(f"警告: 发现{zero_price_count}条记录的price列为0")
 
-# 对于价格相关列，用前后值填充或列均值填充
-price_columns = ['price9', 'bidprice9', 'bidprice10', 'price10', 'price']
-for col in price_columns:
-    df_clean[col] = df_clean[col].fillna(method='ffill').fillna(method='bfill').fillna(df_clean[col].mean())
+# 对于数量列，用0填充
+quantity_columns = ['number9', 'number10']
+for col in quantity_columns:
+    df_clean[col] = df_clean[col].fillna(0)
 
-# 特殊处理price列为0的情况 - 使用同产品类别的平均价格或price9/price10的平均值
-# 创建一个掩码来标识price为0的记录
-zero_price_mask = df_clean['price'] == 0
+# 根据用户需求1：剔除那些number9不为0但number10为0的产品数据
+before_count = df_clean.shape[0]
+df_clean = df_clean[ (df_clean['number9'] == 0) | (df_clean['number10'] != 0) ]
+removed_count = before_count - df_clean.shape[0]
 
-# 对于price为0的记录，尝试使用price9和price10的平均值
-if zero_price_count > 0:
+print(f"\n第一步清洗后数据形状: {df_clean.shape}")
+print(f"剔除了{removed_count}条number9不为0但number10为0的产品数据")
+
+# 根据新需求：在进行数据分析和做图例时，如果遇到bidprice9、bidprice10、price9、price10为空或者0时，忽略该行数据
+# 先保存原始数据形状用于报告
+original_data_shape = df_clean.shape
+
+# 创建掩码来标识bidprice9、bidprice10、price9、price10中任意一个为空或0的行
+cols_to_check = ['bidprice9', 'bidprice10', 'price9', 'price10']
+mask = df_clean[cols_to_check].isna().any(axis=1) | (df_clean[cols_to_check] == 0).any(axis=1)
+
+# 过滤掉这些行
+df_clean = df_clean[~mask]
+
+# 统计被过滤掉的行数
+filtered_rows = original_data_shape[0] - df_clean.shape[0]
+print(f"第二步清洗后数据形状: {df_clean.shape}")
+print(f"剔除了{filtered_rows}条bidprice9、bidprice10、price9、price10为空或0的产品数据")
+
+# 对于保留的数据，对price为0的情况进行特殊处理（如果仍有需要）
+remaining_zero_price_count = (df_clean['price'] == 0).sum()
+if remaining_zero_price_count > 0:
+    print(f"警告: 发现{remaining_zero_price_count}条记录的price列为0，将进行处理")
+    
+    # 创建一个掩码来标识price为0的记录
+    zero_price_mask = df_clean['price'] == 0
+    
+    # 对于price为0的记录，尝试使用price9和price10的平均值
     # 计算price9和price10的平均值，排除0值
     df_clean.loc[zero_price_mask, 'price'] = df_clean.loc[zero_price_mask, ['price9', 'price10']].mean(axis=1)
     
@@ -97,20 +123,7 @@ if zero_price_count > 0:
     # 更新处理后的price为0的计数
     final_zero_price_count = (df_clean['price'] == 0).sum()
     if final_zero_price_count == 0:
-        print(f"成功处理所有{zero_price_count}条price列为0的记录")
-
-# 对于数量列，用0填充
-quantity_columns = ['number9', 'number10']
-for col in quantity_columns:
-    df_clean[col] = df_clean[col].fillna(0)
-
-# 根据用户需求，剔除那些number9不为0但number10为0的产品数据
-before_count = df_clean.shape[0]
-df_clean = df_clean[ (df_clean['number9'] == 0) | (df_clean['number10'] != 0) ]
-removed_count = before_count - df_clean.shape[0]
-
-print(f"\n清洗后数据形状: {df_clean.shape}")
-print(f"剔除了{removed_count}条number9不为0但number10为0的产品数据")
+        print(f"成功处理所有{remaining_zero_price_count}条price列为0的记录")
 
 # 1. 基础统计分析
 print("\n=== 基础统计分析 ===")
