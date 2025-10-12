@@ -7,7 +7,8 @@ import numpy as np
 #改进，在原来excel表中增加两个自己填报项目，计算时候进行复制，并参与运算
 
 def generate_price1(data, input_column='bidprice10', multiplier=1.0):
-    """通过bidprice10列生成price1列数据，如果bidprice10的值为0或者不存在，则取对应行的price代替"""
+    """通过bidprice10列生成price1列数据，如果bidprice10的值为0或者不存在，则取对应行的price代替。
+       如果number11列为0或者为空，对应的行数据返回0。"""
     data_copy = data.copy()
     
     # 检查输入列是否存在
@@ -15,26 +16,32 @@ def generate_price1(data, input_column='bidprice10', multiplier=1.0):
         # 输入列不存在，尝试使用price列
         if 'price' in data_copy.columns:
             print(f"警告: 输入文件中不存在{input_column}列，price1将使用price列的值")
-            return data_copy['price'] * multiplier
+            result = data_copy['price'].copy()
         else:
             print(f"警告: 输入文件中不存在{input_column}列和price列，price1将使用默认值")
-            return [0] * len(data_copy)
+            result = [0] * len(data_copy)
+    else:
+        # 输入列存在，创建结果数组
+        result = data_copy[input_column].copy()
+        
+        # 检查price列是否存在
+        price_available = 'price' in data_copy.columns
+        
+        # 处理每一行
+        for index, row in data_copy.iterrows():
+            # 如果bidprice10为0或缺失
+            if pd.isna(row[input_column]) or row[input_column] == 0:
+                if price_available and not pd.isna(row['price']) and row['price'] != 0:
+                    # 使用price列的值
+                    result.at[index] = row['price']
+                else:
+                    # 如果price列不存在或price也为0，则保持原0值
+                    result.at[index] = 0
     
-    # 输入列存在，创建结果数组
-    result = data_copy[input_column].copy()
-    
-    # 检查price列是否存在
-    price_available = 'price' in data_copy.columns
-    
-    # 处理每一行
-    for index, row in data_copy.iterrows():
-        # 如果bidprice10为0或缺失
-        if pd.isna(row[input_column]) or row[input_column] == 0:
-            if price_available and not pd.isna(row['price']) and row['price'] != 0:
-                # 使用price列的值
-                result.at[index] = row['price']
-            else:
-                # 如果price列不存在或price也为0，则保持原0值
+    # 检查number11列是否存在，如果存在且为0或空，则对应行数据返回0
+    if 'number11' in data_copy.columns:
+        for index, row in data_copy.iterrows():
+            if pd.isna(row['number11']) or row['number11'] == 0:
                 result.at[index] = 0
     
     # 应用乘数并返回结果
