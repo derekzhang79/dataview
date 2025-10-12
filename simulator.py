@@ -93,7 +93,8 @@ def generate_price2(data, input_column='bidprice9', mark_number='number11', mult
 
 
 def generate_price4(data, column1='bidprice9', column2='bidprice10', price_column='price', mark_number='number11'):
-    """通过price、bidprice9和bidprice10列生成price4列数据，返回三列中的最小值。
+    """通过price、bidprice9和bidprice10列生成price4列数据，返回三列中不为0值的最小值。
+       如果其中一个为0，则取另外两个的最小值；如果有两个为0，则返回第三个；如果三个都是0，则返回0。
        如果mark_number列为0或者为空，对应的行数据返回0。"""
     # 检查所有需要的列是否存在
     columns_to_check = [price_column, column1, column2]
@@ -114,8 +115,17 @@ def generate_price4(data, column1='bidprice9', column2='bidprice10', price_colum
     # 创建一个包含三列数据的DataFrame用于计算最小值
     min_data = data_copy[[price_column, column1, column2]].copy()
     
-    # 计算每行的最小值
-    result = min_data.min(axis=1)
+    # 计算每行的最小值（排除0值）
+    # 创建一个函数来计算每行非0值的最小值
+    def min_without_zero(row):
+        non_zero_values = [val for val in row if val != 0]
+        if non_zero_values:
+            return min(non_zero_values)
+        else:
+            return 0
+    
+    # 对每一行应用这个函数
+    result = min_data.apply(min_without_zero, axis=1)
     
     # 处理可能的缺失值，使用0代替
     result = result.fillna(0)
