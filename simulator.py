@@ -92,91 +92,56 @@ def generate_price2(data, input_column='bidprice9', mark_number='number11', mult
     return result * multiplier
 
 
-def generate_price4(data, column1='bidprice9', column2='bidprice10'):
-    """通过bidprice9和bidprice10列生成price3列数据，当任一列为空或0时取另一列值代替，两列都为空或0时使用price代替"""
-    # 检查price列是否存在
-    price_column_exists = 'price' in data.columns
+def generate_price4(data, column1='bidprice9', column2='bidprice10', price_column='price'):
+    """通过price、bidprice9和bidprice10列生成price4列数据，返回三列中的最小值"""
+    # 检查所有需要的列是否存在
+    columns_to_check = [price_column, column1, column2]
+    missing_columns = [col for col in columns_to_check if col not in data.columns]
     
-    # 确保输入列存在
-    missing_columns = []
-    if column1 not in data.columns:
-        missing_columns.append(column1)
-    if column2 not in data.columns:
-        missing_columns.append(column2)
-    
-    # 如果两列都不存在
-    if len(missing_columns) == 2:
-        if price_column_exists:
-            print(f"警告: 输入文件中不存在{', '.join(missing_columns)}列，price3将使用price列的值")
-            # 确保price列不为0且不为空
-            result = data['price'].copy()
-            # 处理price列中的0值和缺失值，使用0代替
-            result = result.fillna(0)
-            result[result == 0] = 0
-            return result
-        else:
-            print(f"警告: 输入文件中不存在{', '.join(missing_columns)}列和price列，price3将使用默认值")
-            return [0] * len(data)
-    # 如果只有一列不存在
-    elif len(missing_columns) == 1:
-        existing_column = column2 if column1 in missing_columns else column1
-        print(f"警告: 输入文件中不存在{', '.join(missing_columns)}列，price3将使用{existing_column}列的值")
-        # 使用存在的那一列的值
-        result = data[existing_column].copy()
-        # 处理0值和缺失值
-        if price_column_exists:
-            # 当存在的列为0或缺失时，使用price列的值代替
-            is_zero_or_missing = (result == 0) | (result.isna())
-            valid_price = (data['price'] != 0) & ~data['price'].isna()
-            should_replace = is_zero_or_missing & valid_price
-            result[should_replace] = data.loc[should_replace, 'price']
-        # 处理剩余的缺失值，使用0代替
-        result = result.fillna(0)
-        return result
-    
-    # 两列都存在的情况
-    # 复制数据
+    # 复制数据以避免修改原始数据
     data_copy = data.copy()
     
-    # 创建结果数组，初始使用两列的平均值
-    result = (data_copy[column1] + data_copy[column2]) / 2
+    # 为缺失的列创建全0的临时列
+    for col in missing_columns:
+        print(f"警告: 输入文件中不存在{col}列，将使用0值代替")
+        data_copy[col] = 0
     
-    # 处理第一列为0或缺失的情况，使用第二列的值代替
-    column1_zero_or_missing = (data_copy[column1] == 0) | (data_copy[column1].isna())
-    column2_valid = (data_copy[column2] != 0) & ~data_copy[column2].isna()
-    result[column1_zero_or_missing & column2_valid] = data_copy.loc[column1_zero_or_missing & column2_valid, column2]
+    # 处理各列中的NaN值，使用0代替
+    for col in columns_to_check:
+        data_copy[col] = data_copy[col].fillna(0)
     
-    # 处理第二列为0或缺失的情况，使用第一列的值代替
-    column2_zero_or_missing = (data_copy[column2] == 0) | (data_copy[column2].isna())
-    column1_valid = (data_copy[column1] != 0) & ~data_copy[column1].isna()
-    result[column2_zero_or_missing & column1_valid] = data_copy.loc[column2_zero_or_missing & column1_valid, column1]
+    # 创建一个包含三列数据的DataFrame用于计算最小值
+    min_data = data_copy[[price_column, column1, column2]].copy()
     
-    # 处理两列都为0或缺失的情况，如果price列存在且有效，使用price列的值代替
-    both_zero_or_missing = (data_copy[column1] == 0) | (data_copy[column1].isna()) | \
-                          ((data_copy[column2] == 0) | (data_copy[column2].isna()))
-    if price_column_exists:
-        valid_price = (data['price'] != 0) & ~data['price'].isna()
-        result[both_zero_or_missing & valid_price] = data.loc[both_zero_or_missing & valid_price, 'price']
+    # 计算每行的最小值
+    result = min_data.min(axis=1)
     
-    # 处理剩余的缺失值，使用0代替
+    # 处理可能的缺失值，使用0代替
     result = result.fillna(0)
     
     return result
 
 
-def generate_price3(data, input_column='price', multiplier=1.0):
-    """通过base_price列生成price4列数据，应用与其他价格列类似的转换逻辑"""
-    # 确保输入列存在，如果不存在则尝试使用fallback_column
+def generate_price3(data, input_column='price', mark_number='number11', multiplier=1.0):
+    """通过price列生成price3列数据，应用乘数转换逻辑。
+       如果mark_number列为0或者为空，对应的行数据返回0。"""
+    # 确保输入列存在
     if input_column not in data.columns:
-        print(f"警告: 输入文件中不存在{input_column}列和{input_column}列，price4将使用默认值")
+        print(f"警告: 输入文件中不存在{input_column}列，price3将使用默认值")
         return [0] * len(data)
     
     # 处理可能的缺失值，使用0代替
     data_copy = data.copy()
-    data_copy[input_column] = data_copy[input_column].fillna(0)
+    result = data_copy[input_column].fillna(0)
     
-    # 生成price4列，应用乘数转换逻辑
-    return data_copy[input_column] * multiplier
+    # 检查mark_number列是否存在，如果存在且为0或空，则对应行数据返回0
+    if mark_number in data.columns:
+        # 找出mark_number列为0或空的行索引
+        mark_zero_or_missing = data[mark_number].isna() | (data[mark_number] == 0)
+        result[mark_zero_or_missing] = 0
+    
+    # 应用乘数并返回结果
+    return result * multiplier
 
 def generate_price5(data, input_column='price', multiplier=0.5):
     """通过original_price列生成price5列数据"""
