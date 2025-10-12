@@ -92,8 +92,9 @@ def generate_price2(data, input_column='bidprice9', mark_number='number11', mult
     return result * multiplier
 
 
-def generate_price4(data, column1='bidprice9', column2='bidprice10', price_column='price'):
-    """通过price、bidprice9和bidprice10列生成price4列数据，返回三列中的最小值"""
+def generate_price4(data, column1='bidprice9', column2='bidprice10', price_column='price', mark_number='number11'):
+    """通过price、bidprice9和bidprice10列生成price4列数据，返回三列中的最小值。
+       如果mark_number列为0或者为空，对应的行数据返回0。"""
     # 检查所有需要的列是否存在
     columns_to_check = [price_column, column1, column2]
     missing_columns = [col for col in columns_to_check if col not in data.columns]
@@ -119,6 +120,12 @@ def generate_price4(data, column1='bidprice9', column2='bidprice10', price_colum
     # 处理可能的缺失值，使用0代替
     result = result.fillna(0)
     
+    # 检查mark_number列是否存在，如果存在且为0或空，则对应行数据返回0
+    if mark_number in data.columns:
+        # 找出mark_number列为0或空的行索引
+        mark_zero_or_missing = data[mark_number].isna() | (data[mark_number] == 0)
+        result[mark_zero_or_missing] = 0
+    
     return result
 
 
@@ -143,7 +150,7 @@ def generate_price3(data, input_column='price', mark_number='number11', multipli
     # 应用乘数并返回结果
     return result * multiplier
 
-def generate_price5(data, input_column='price', multiplier=0.5):
+def generate_price5(data, input_column='price', mark_number='number11',multiplier=1.5):
     """通过original_price列生成price5列数据"""
     # 确保输入列存在，如果不存在则尝试使用fallback_column
     if input_column not in data.columns:
@@ -152,10 +159,16 @@ def generate_price5(data, input_column='price', multiplier=0.5):
     
     # 处理可能的缺失值，使用0代替
     data_copy = data.copy()
-    data_copy[input_column] = data_copy[input_column].fillna(0)
+    result = data_copy[input_column].fillna(0)
+
+     # 检查mark_number列是否存在，如果存在且为0或空，则对应行数据返回0
+    if mark_number in data.columns:
+        # 找出mark_number列为0或空的行索引
+        mark_zero_or_missing = data[mark_number].isna() | (data[mark_number] == 0)
+        result[mark_zero_or_missing] = 0
     
     # 生成price5列，应用乘数转换逻辑
-    return data_copy[input_column] * multiplier
+    return result * multiplier
 
 
 def generate_median(data, columns=['price1', 'price2', 'price3', 'price4', 'price5']):
@@ -428,12 +441,12 @@ def main():
         # 计算利润：符合条件的行中，number11乘以price1的总和
         score1 = (df.loc[mask, 'number11'] * df.loc[mask, 'price1']).sum()
         # 对于其他score，暂时设为0（根据后续需求可以扩展）
-        score2 = 0
-        score3 = 0
-        score4 = 0
-        score5 = 0
+        score2 = (df.loc[mask, 'number11'] * (df.loc[mask, 'price2']-df.loc[mask, 'price'])).sum()
+        score3 = (df.loc[mask, 'number11'] * (df.loc[mask, 'price3']-df.loc[mask, 'price'])).sum()
+        score4 = (df.loc[mask, 'number11'] * (df.loc[mask, 'price4']-df.loc[mask, 'price'])).sum()
+        score5 = (df.loc[mask, 'number11'] * (df.loc[mask, 'price5']-df.loc[mask, 'price'])).sum()
         print(f"\n利润计算结果：")
-        print(f"score1: {score1}")
+        print(f"score1: {score1}, score2: {score2}, score3: {score3}, score4: {score4}, score5: {score5}")
     else:
         print("警告：数据中不存在number11列，无法计算利润")
         # 所有score设为0
