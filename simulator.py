@@ -290,9 +290,8 @@ def update_ratios(data):
     - 如果price3 < median*0.2 或 price3 > median*1.8，则s3 = min(s1, s2, s4, s5)
     - 如果price4 < median*0.2 或 price4 > median*1.8，则s4 = min(s1, s2, s3, s5)
     - 如果price5 < median*0.2 或 price5 > median*1.8，则s5 = min(s1, s2, s3, s4)
-    ""
+    """
     
-    # 修正文档字符串未终止问题，先删除多余的未终止字符串
     # 确保所有需要的列都存在
     required_columns = ['price1', 'price2', 'price3', 'price4', 'price5', 'median', 's1', 's2', 's3', 's4', 's5']
     missing_columns = [col for col in required_columns if col not in data.columns]
