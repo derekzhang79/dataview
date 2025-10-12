@@ -37,11 +37,14 @@ def set_default_values_to_mongodb(db_name, collection_name, field_defaults):
         # 准备更新操作
         update_result = None
         for field_name, default_value in field_defaults.items():
-            # 更新所有缺少该字段或字段值为None的文档
+            # 更新所有缺少该字段、字段值为None或字段值为空值的文档
             filter_query = {
                 "$or": [
                     {field_name: {'$exists': False}},
-                    {field_name: None}
+                    {field_name: None},
+                    {field_name: ""},
+                    {field_name: []},
+                    {field_name: {}}
                 ]
             }
             update_query = {"$set": {field_name: default_value}}
