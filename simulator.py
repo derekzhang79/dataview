@@ -284,12 +284,13 @@ def generate_a_values(data):
 def update_ratios(data):
     """根据规则更新s1、s2、s3、s4、s5五列数据
     规则：
+    - 如果price1为0，则直接返回原始的s1、s2、s3、s4、s5值，不进行更新
     - 如果price1 < median*0.2 或 price1 > median*1.8，则s1 = min(s2, s3, s4, s5)
     - 如果price2 < median*0.2 或 price2 > median*1.8，则s2 = min(s1, s3, s4, s5)
     - 如果price3 < median*0.2 或 price3 > median*1.8，则s3 = min(s1, s2, s4, s5)
     - 如果price4 < median*0.2 或 price4 > median*1.8，则s4 = min(s1, s2, s3, s5)
     - 如果price5 < median*0.2 或 price5 > median*1.8，则s5 = min(s1, s2, s3, s4)
-    """
+    ""
     
     # 修正文档字符串未终止问题，先删除多余的未终止字符串
     # 确保所有需要的列都存在
@@ -299,6 +300,14 @@ def update_ratios(data):
         print(f"警告: 输入数据中不存在{', '.join(missing_columns)}列，无法更新s1、s2、s3、s4、s5")
         # 返回原始数据
         return data['s1'].values, data['s2'].values, data['s3'].values, data['s4'].values, data['s5'].values
+    
+    # 检查price1是否为0，如果是则直接返回原始的s1-s5值
+    if 'price1' in data.columns:
+        data_copy_precheck = data.copy()
+        data_copy_precheck['price1'] = data_copy_precheck['price1'].fillna(0)
+        if (data_copy_precheck['price1'] == 0).any():
+            # 如果有任何一行的price1为0，则直接返回原始值
+            return data['s1'].values, data['s2'].values, data['s3'].values, data['s4'].values, data['s5'].values
     
     # 创建数据副本并处理缺失值
     data_copy = data.copy()
