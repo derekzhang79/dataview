@@ -6,9 +6,9 @@ import numpy as np
 
 #改进，在原来excel表中增加两个自己填报项目，计算时候进行复制，并参与运算
 
-def generate_price1(data, input_column='bidprice10', multiplier=1.0):
+def generate_price1(data, input_column='bidprice10', mark_number='number11',multiplier=1.0):
     """通过bidprice10列生成price1列数据，如果bidprice10的值为0或者不存在，则取对应行的price代替。
-       如果number11列为0或者为空，对应的行数据返回0。"""
+       如果mark_number列为0或者为空，对应的行数据返回0。"""
     data_copy = data.copy()
     
     # 检查输入列是否存在
@@ -38,18 +38,19 @@ def generate_price1(data, input_column='bidprice10', multiplier=1.0):
                     # 如果price列不存在或price也为0，则保持原0值
                     result.at[index] = 0
     
-    # 检查number11列是否存在，如果存在且为0或空，则对应行数据返回0
-    if 'number11' in data_copy.columns:
+    # 检查mark_number列是否存在，如果存在且为0或空，则对应行数据返回0
+    if mark_number in data_copy.columns:
         for index, row in data_copy.iterrows():
-            if pd.isna(row['number11']) or row['number11'] == 0:
+            if pd.isna(row[mark_number]) or row[mark_number] == 0:
                 result.at[index] = 0
     
     # 应用乘数并返回结果
     return result * multiplier
 
 
-def generate_price2(data, input_column='bidprice9', multiplier=1.0):
-    """通过bidprice9列生成price2列数据，当bidprice9不存在或为0时使用对应行的price值代替"""
+def generate_price2(data, input_column='bidprice9', mark_number='number11', multiplier=1.0):
+    """通过bidprice9列生成price2列数据，当bidprice9不存在或为0时使用对应行的price值代替。
+       如果mark_number列为0或者为空，对应的行数据返回0。"""
     # 检查price列是否存在
     price_column_exists = 'price' in data.columns
     
@@ -61,7 +62,7 @@ def generate_price2(data, input_column='bidprice9', multiplier=1.0):
             result = data['price'].copy()
         else:
             print(f"警告: 输入文件中不存在{input_column}列和price列，price2将使用默认值")
-            return [0] * len(data)
+            result = [0] * len(data)
     else:
         # 复制数据
         data_copy = data.copy()
@@ -81,11 +82,17 @@ def generate_price2(data, input_column='bidprice9', multiplier=1.0):
         # 处理剩余的缺失值，使用0代替
         result = result.fillna(0)
     
+    # 检查mark_number列是否存在，如果存在且为0或空，则对应行数据返回0
+    if mark_number in data.columns:
+        # 找出mark_number列为0或空的行索引
+        mark_zero_or_missing = data[mark_number].isna() | (data[mark_number] == 0)
+        result[mark_zero_or_missing] = 0
+    
     # 应用乘数并返回结果
     return result * multiplier
 
 
-def generate_price3(data, column1='bidprice9', column2='bidprice10'):
+def generate_price4(data, column1='bidprice9', column2='bidprice10'):
     """通过bidprice9和bidprice10列生成price3列数据，当任一列为空或0时取另一列值代替，两列都为空或0时使用price代替"""
     # 检查price列是否存在
     price_column_exists = 'price' in data.columns
@@ -157,7 +164,7 @@ def generate_price3(data, column1='bidprice9', column2='bidprice10'):
     return result
 
 
-def generate_price4(data, input_column='price', multiplier=1.0):
+def generate_price3(data, input_column='price', multiplier=1.0):
     """通过base_price列生成price4列数据，应用与其他价格列类似的转换逻辑"""
     # 确保输入列存在，如果不存在则尝试使用fallback_column
     if input_column not in data.columns:
