@@ -418,15 +418,41 @@ def main():
     sum3 = df['a3'].sum()
     sum4 = df['a4'].sum()
     sum5 = df['a5'].sum()
+
+    #计算a1-a5的利润数值
+    # 检查number11列是否存在
+    if 'number11' in df.columns:
+        # 计算score1：number11列所有不为0且非空的行的数值乘以该行对应的price1的数值的和
+        # 创建掩码，筛选出number11不为0且非空的行
+        mask = (df['number11'] != 0) & (df['number11'].notna())
+        # 计算利润：符合条件的行中，number11乘以price1的总和
+        score1 = (df.loc[mask, 'number11'] * df.loc[mask, 'price1']).sum()
+        # 对于其他score，暂时设为0（根据后续需求可以扩展）
+        score2 = 0
+        score3 = 0
+        score4 = 0
+        score5 = 0
+        print(f"\n利润计算结果：")
+        print(f"score1: {score1}")
+    else:
+        print("警告：数据中不存在number11列，无法计算利润")
+        # 所有score设为0
+        score1 = 0
+        score2 = 0
+        score3 = 0
+        score4 = 0
+        score5 = 0
     
     # 对总和进行从小到大排序
-    sums = [(sum1, 'sum1'), (sum2, 'sum2'), (sum3, 'sum3'), (sum4, 'sum4'), (sum5, 'sum5')]
+    sums = [(sum1, 'sum1',score1), (sum2, 'sum2',score2), (sum3, 'sum3',score3), (sum4, 'sum4',score4), (sum5, 'sum5',score5)]
     sorted_sums = sorted(sums, key=lambda x: x[0])
     
     # 打印排序后的结果
     print("\n各a列总和从小到大排序:")
-    for value, name in sorted_sums:
-        print(f"{name}: {value}")
+    for value, name,score in sorted_sums:
+        print(f"{name}: {value}, 利润: {score}")
+
+
     
     # 将结果写入新的Excel文件
     try:
