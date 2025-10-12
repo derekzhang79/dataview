@@ -159,7 +159,8 @@ def generate_price5(data, input_column='price', multiplier=0.5):
 
 
 def generate_median(data, columns=['price1', 'price2', 'price3', 'price4', 'price5']):
-    """计算price1、price2、price3从小到大排列的中位数"""
+    """计算price1、price2、price3从小到大排列的中位数。
+       如果price1的数值为0，则对应行的median值直接返回0，不需要计算中位数。"""
     # 确保所有需要的列都存在
     missing_columns = [col for col in columns if col not in data.columns]
     if missing_columns:
@@ -171,11 +172,17 @@ def generate_median(data, columns=['price1', 'price2', 'price3', 'price4', 'pric
     for col in columns:
         data_copy[col] = data_copy[col].fillna(0)
     
+    # 检测price1列为0的行
+    price1_zero_mask = data_copy['price1'] == 0
+    
     # 计算每一行的中位数
     # 将五列数据按行排序
     sorted_values = np.sort(data_copy[columns].values, axis=1)
     # 取中间值作为中位数（由于是五列，索引为2的元素就是中位数）
     median_values = sorted_values[:, 2]
+    
+    # 对于price1为0的行，将中位数设为0
+    median_values[price1_zero_mask] = 0
     
     return median_values
 
