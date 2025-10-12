@@ -193,6 +193,7 @@ def generate_ratios(data, columns=['price1', 'price2', 'price3', 'price4', 'pric
     s3 = a/price3 * 60
     s4 = a/price4 * 60
     s5 = a/price5 * 60
+    如果检测到price1为0，则s1、s2、s3、s4、s5自动设置为0返回
     """
     # 确保所有需要的列都存在
     missing_columns = [col for col in columns if col not in data.columns]
@@ -206,6 +207,14 @@ def generate_ratios(data, columns=['price1', 'price2', 'price3', 'price4', 'pric
     data_copy = data.copy()
     for col in columns:
         data_copy[col] = data_copy[col].fillna(0)
+    
+    # 检测price1列为0的行
+    price1_zero_mask = data_copy['price1'] == 0
+    
+    # 如果所有行的price1都为0，直接返回全0的结果
+    if price1_zero_mask.all():
+        zero_values = [0] * len(data)
+        return zero_values, zero_values, zero_values, zero_values, zero_values
     
     # 计算每一行的最小值a
     min_values = np.min(data_copy[columns].values, axis=1)
@@ -221,6 +230,14 @@ def generate_ratios(data, columns=['price1', 'price2', 'price3', 'price4', 'pric
     s3 = (min_values / data_copy['price3'].values) * 60
     s4 = (min_values / data_copy['price4'].values) * 60
     s5 = (min_values / data_copy['price5'].values) * 60
+    
+    # 对于price1为0的行，将所有s值设为0
+    if price1_zero_mask.any():
+        s1[price1_zero_mask] = 0
+        s2[price1_zero_mask] = 0
+        s3[price1_zero_mask] = 0
+        s4[price1_zero_mask] = 0
+        s5[price1_zero_mask] = 0
     
     return s1, s2, s3, s4, s5
 
