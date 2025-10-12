@@ -96,6 +96,7 @@ def export_mongodb_to_excel():
     parser.add_argument('--fields', help='要导出的字段名，多个字段用逗号分隔(默认导出所有字段)')
     parser.add_argument('--sort', default='nameid', help='排序字段(默认: nameid)')
     parser.add_argument('--order', choices=['asc', 'desc'], default='asc', help='排序顺序(默认: asc升序)')
+    parser.add_argument('--exportfields', help='从constprice集合导出的额外字段，多个字段用逗号分隔(例如：price11,price12)')
     
     # 解析命令行参数
     args = parser.parse_args()
@@ -153,19 +154,31 @@ def export_mongodb_to_excel():
             print("警告: 没有找到数据")
             return
         
-        # 从constprice集合获取price数据并添加到DataFrame
-        print("正在从constprice集合获取产品价格数据...")
+        # 从constprice集合获取数据并添加到DataFrame
+        print("正在从constprice集合获取产品数据...")
         # 获取constprice集合引用
         constprice_collection = db['constprice']
         
-        # 创建一个新的price列，初始化为0
-        df['price'] = 0
+        # 设置要从constprice集合导出的字段
+        export_fields = ['price']  # 默认导出price字段
+        if args.exportfields:
+            # 添加用户指定的字段
+            user_fields = [field.strip() for field in args.exportfields.split(',')]
+            export_fields.extend(user_fields)
+            # 去重，确保没有重复字段
+            export_fields = list(set(export_fields))
+            
+        print(f"  从constprice集合导出的字段: {', '.join(export_fields)}")
+        
+        # 为每个要导出的字段创建新列并初始化为0
+        for field in export_fields:
+            df[field] = 0
         
         # 用于统计匹配情况
         matched_count = 0
         unmatched_count = 0
         
-        # 遍历DataFrame，使用nameid查询constprice中的price
+        # 遍历DataFrame，使用nameid查询constprice中的字段
         for index, row in df.iterrows():
             try:
                 nameid = row['nameid']
@@ -183,53 +196,66 @@ def export_mongodb_to_excel():
                     # 如果转换失败，使用原始nameid继续查询
                     query_nameid = nameid
                     
-                # 查询constprice集合中对应nameid的文档
-                const_price_doc = constprice_collection.find_one({'nameid': query_nameid}, {'price': 1, '_id': 0})
+                # 创建查询字段字典，只获取需要的字段
+                projection = {field: 1 for field in export_fields}
+                projection['_id'] = 0  # 不包含_id字段
                 
-                # 如果找到对应文档，处理price值
-                if const_price_doc and 'price' in const_price_doc:
-                    price_value = const_price_doc['price']
+                # 查询constprice集合中对应nameid的文档
+                const_price_doc = constprice_collection.find_one({'nameid': query_nameid}, projection)
+                
+                # 如果找到对应文档，处理字段值
+                if const_price_doc:
                     matched_count += 1
                     
-                    # 处理不同类型的price值
-                    try:
-                        # 尝试将price值转换为浮点数
-                        if isinstance(price_value, str):
-                            # 处理字符串类型的price
-                            price_value = price_value.strip().upper()
-                            if price_value in ('N/A', 'NA', '', 'NONE', 'NULL'):
-                                df.at[index, 'price'] = 0
-                            else:
-                                # 尝试将字符串转换为数字
-                                df.at[index, 'price'] = float(price_value)
-                        elif isinstance(price_value, (int, float)):
-                            # 对于数字类型的price，直接使用
-                            df.at[index, 'price'] = price_value
+                    # 处理每个需要导出的字段
+                    for field in export_fields:
+                        if field in const_price_doc:
+                            field_value = const_price_doc[field]
+                            
+                            # 处理不同类型的字段值
+                            try:
+                                # 尝试将字段值转换为浮点数
+                                if isinstance(field_value, str):
+                                    # 处理字符串类型的字段
+                                    field_value = field_value.strip().upper()
+                                    if field_value in ('N/A', 'NA', '', 'NONE', 'NULL'):
+                                        df.at[index, field] = 0
+                                    else:
+                                        # 尝试将字符串转换为数字
+                                        df.at[index, field] = float(field_value)
+                                elif isinstance(field_value, (int, float)):
+                                    # 对于数字类型的字段，直接使用
+                                    df.at[index, field] = field_value
+                                else:
+                                    # 其他类型默认为0
+                                    df.at[index, field] = 0
+                            except (ValueError, TypeError):
+                                # 如果转换失败，设置为0
+                                df.at[index, field] = 0
                         else:
-                            # 其他类型默认为0
-                            df.at[index, 'price'] = 0
-                    except (ValueError, TypeError):
-                        # 如果转换失败，设置为0
-                        df.at[index, 'price'] = 0
+                            # 字段不存在，保持为0
+                            df.at[index, field] = 0
                 else:
                     unmatched_count += 1
-                    # 如果没有找到对应文档，保持price为0
-                    df.at[index, 'price'] = 0
+                    # 如果没有找到对应文档，所有字段保持为0
+                    for field in export_fields:
+                        df.at[index, field] = 0
                     # 可选：添加日志记录未匹配的nameid
-                    # print(f"未找到nameid为{nameid}的产品价格数据")
+                    # print(f"未找到nameid为{nameid}的产品数据")
             except Exception as e:
                 # 安全地处理nameid可能不存在的情况
                 try:
                     error_nameid = row.get('nameid', '未知')
-                    print(f"获取产品ID为{error_nameid}的价格时出错: {str(e)}")
+                    print(f"获取产品ID为{error_nameid}的数据时出错: {str(e)}")
                 except:
-                    print(f"获取产品价格时出错: {str(e)}")
-                # 即使出错，也要确保price列为0
-                df.at[index, 'price'] = 0
+                    print(f"获取产品数据时出错: {str(e)}")
+                # 即使出错，也要确保所有字段列为0
+                for field in export_fields:
+                    df.at[index, field] = 0
                 continue
         
         # 显示匹配统计信息
-        print(f"从constprice集合获取价格数据完成：")
+        print(f"从constprice集合获取数据完成：")
         print(f"  成功匹配: {matched_count} 条记录")
         print(f"  未找到匹配: {unmatched_count} 条记录")
         
