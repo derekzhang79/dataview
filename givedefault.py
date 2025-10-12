@@ -5,7 +5,7 @@ import json
 import os
 
 
-def set_default_values_to_mongodb(db_name, collection_name, field_defaults):
+def set_default_values_to_mongodb(db_name, collection_name, field_defaults, force_update=False):
     """
     设置MongoDB集合中指定字段的默认值
     
@@ -37,16 +37,25 @@ def set_default_values_to_mongodb(db_name, collection_name, field_defaults):
         # 准备更新操作
         update_result = None
         for field_name, default_value in field_defaults.items():
-            # 更新所有缺少该字段、字段值为None或字段值为空值的文档
-            filter_query = {
-                "$or": [
-                    {field_name: {'$exists': False}},
-                    {field_name: None},
-                    {field_name: ""},
-                    {field_name: []},
-                    {field_name: {}}
-                ]
-            }
+            # 根据是否强制更新决定过滤条件
+            if force_update:
+                # 强制更新：没有过滤条件，更新所有文档
+                filter_query = {}
+                print(f"\n正在强制为所有文档的字段 '{field_name}' 设置值 '{default_value}'")
+            else:
+                # 默认行为：只更新缺少该字段、字段值为None或字段值为空值的文档
+                filter_query = {
+                    "$or": [
+                        {field_name: {'$exists': False}},
+                        {field_name: None},
+                        {field_name: ""},
+                        {field_name: []},
+                        {field_name: {}}
+                    ]
+                }
+                print(f"\n正在为字段 '{field_name}' 设置默认值 '{default_value}'")
+                print(f"过滤条件: {filter_query}")
+                
             update_query = {"$set": {field_name: default_value}}
             
             print(f"\n正在为字段 '{field_name}' 设置默认值 '{default_value}'")
@@ -133,6 +142,7 @@ def main():
     parser = argparse.ArgumentParser(description='为MongoDB集合中的字段设置默认值')
     parser.add_argument('--db', default='foooodata', help='MongoDB数据库名称(默认: foooodata)')
     parser.add_argument('--collection', default='constprice', help='MongoDB集合名称(默认: constprice)')
+    parser.add_argument('--force', action='store_true', help='强制更新所有文档中的字段值，而不仅限于空值或缺失字段')
     parser.add_argument('fields', nargs='+', help='要设置默认值的字段，格式为: field_name=default_value，可指定多个字段')
     
     # 解析命令行参数
@@ -157,7 +167,7 @@ def main():
     print("=" * 60)
     
     # 执行设置默认值操作
-    result = set_default_values_to_mongodb(db_name, collection_name, field_defaults)
+    result = set_default_values_to_mongodb(db_name, collection_name, field_defaults, args.force)
     
     if result['success']:
         print("\n" + "=" * 60)
