@@ -62,11 +62,13 @@ def smart_upsert_to_mongodb(collection, data_list, bid_name):
                 current_bid_value = data[bid_name]
                 existing_bid_value = existing_record.get(bid_name, 0)
                 
-                # 只有当bid_name值不同时才进行更新
-                if current_bid_value != existing_bid_value:
+                # 只有当数据库中原来的数据为0时才更新
+                if existing_bid_value == 0 and current_bid_value != 0:
                     update_fields[bid_name] = current_bid_value
-                    print(f"更新{bid_name}字段: nameid={data['nameid']} 从 {existing_bid_value} 更新为 {current_bid_value}")
+                    print(f"更新{bid_name}字段: nameid={data['nameid']} 从 0 更新为 {current_bid_value}")
                     updated_any = True
+                elif existing_bid_value != 0:
+                    print(f"忽略更新{bid_name}字段: nameid={data['nameid']} 数据库中已有非零值 {existing_bid_value}")
             
             if update_fields:
                 operations.append(
@@ -103,6 +105,11 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
     db_name: 数据库名称
     collection_name: 集合名称
     bid_name: 要导入的投标价格字段名称
+    
+    特殊规则:
+    1. 以nameid作为唯一键
+    2. 对于bid_name字段，只有当数据库中原来的值为0时才更新
+    3. 如果数据库中bid_name字段已有非零值，则忽略该行的更新
     """
     
     try:
@@ -262,9 +269,10 @@ def main():
     print("特殊规则:")
     print("1. 以nameid作为唯一键")
     print("2. 如果nameid不存在，插入新记录")
-    print("3. 如果nameid已存在，当字段值不同时更新对应字段")
-    print(f"4. 导入nameid、name(如果存在)、和{bid_name}字段")
-    print("5. 确保所有字段不为null，数值类型为0")
+    print(f"3. 对于{bid_name}字段，只有当数据库中原来的值为0时才更新")
+    print(f"4. 如果数据库中{bid_name}字段已有非零值，则忽略该行的更新")
+    print(f"5. 导入nameid、name(如果存在)、和{bid_name}字段")
+    print("6. 确保所有字段不为null，数值类型为0")
     print("=" * 60)
     
     # 执行导入
