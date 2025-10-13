@@ -38,17 +38,18 @@ def smart_upsert_to_mongodb(collection, data_list):
             update_fields = {}
             
             # 处理number开头的字段 - 相加操作
-            for key, value in data.items():
-                if key.startswith('number') and not pd.isna(value):
-                    # 获取现有值，如果不存在则为0
-                    existing_value = existing_record.get(key, 0)
-                    # 如果现有值是None，设为0
-                    if existing_value is None:
-                        existing_value = 0
-                    # 相加
-                    new_value = existing_value + value
-                    update_fields[key] = new_value
-                    print(f"更新number字段: {key}={existing_value} + {value} = {new_value}")
+            # 以下代码已被注释掉
+            # for key, value in data.items():
+            #     if key.startswith('number') and not pd.isna(value):
+            #         # 获取现有值，如果不存在则为0
+            #         existing_value = existing_record.get(key, 0)
+            #         # 如果现有值是None，设为0
+            #         if existing_value is None:
+            #             existing_value = 0
+            #         # 相加
+            #         new_value = existing_value + value
+            #         update_fields[key] = new_value
+            #         print(f"更新number字段: {key}={existing_value} + {value} = {new_value}")
             
             # 添加其他新字段（非number开头）
             for key, value in data.items():

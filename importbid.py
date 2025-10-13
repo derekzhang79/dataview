@@ -20,10 +20,11 @@ def clean_data_record(record):
     return cleaned
 
 
-def smart_upsert_to_mongodb(collection, data_list, bid_name):
+def smart_upsert_to_mongodb(collection, data_list, bid_name=None, number_name=None):
     """
     智能插入/更新数据到MongoDB
     基于nameid的唯一性，当字段值不同时更新对应字段
+    支持number_name字段的相加更新操作
     """
     operations = []
     inserted_count = 0
@@ -58,7 +59,7 @@ def smart_upsert_to_mongodb(collection, data_list, bid_name):
                     updated_any = True
             
             # 处理bid_name字段
-            if bid_name in data:
+            if bid_name and bid_name in data:
                 current_bid_value = data[bid_name]
                 existing_bid_value = existing_record.get(bid_name, 0)
                 
@@ -69,6 +70,21 @@ def smart_upsert_to_mongodb(collection, data_list, bid_name):
                     updated_any = True
                 elif existing_bid_value != 0:
                     print(f"忽略更新{bid_name}字段: nameid={data['nameid']} 数据库中已有非零值 {existing_bid_value}")
+            
+            # 处理number_name字段 - 执行相加操作
+            if number_name and number_name in data:
+                current_number_value = data[number_name]
+                existing_number_value = existing_record.get(number_name, 0)
+                
+                # 如果现有值为None，设为0
+                if existing_number_value is None:
+                    existing_number_value = 0
+                
+                # 执行相加操作
+                new_value = existing_number_value + current_number_value
+                update_fields[number_name] = new_value
+                print(f"更新{number_name}字段(相加): nameid={data['nameid']} 从 {existing_number_value} + {current_number_value} = {new_value}")
+                updated_any = True
             
             if update_fields:
                 operations.append(
@@ -96,7 +112,7 @@ def smart_upsert_to_mongodb(collection, data_list, bid_name):
         return result
     return None
 
-def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='price11'):
+def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name=None, number_name=None):
     """
     从Excel文件导入数据到MongoDB
     
@@ -104,12 +120,14 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
     excel_files: Excel文件路径列表
     db_name: 数据库名称
     collection_name: 集合名称
-    bid_name: 要导入的投标价格字段名称
+    bid_name: 要导入的投标价格字段名称（可选）
+    number_name: 要导入的数值字段名称（支持相加更新）
     
     特殊规则:
     1. 以nameid作为唯一键
-    2. 对于bid_name字段，只有当数据库中原来的值为0时才更新
+    2. 对于bid_name字段（如果指定），只有当数据库中原来的值为0时才更新
     3. 如果数据库中bid_name字段已有非零值，则忽略该行的更新
+    4. 对于number_name字段，执行相加更新操作
     """
     
     try:
@@ -147,7 +165,10 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
                 print(f"警告: 文件 {excel_file} 不包含name字段，将使用空字符串")
             
             # 检查bid_name列是否存在
-            has_bid_column = bid_name in df.columns
+            has_bid_column = bid_name and bid_name in df.columns
+            
+            # 检查number_name列是否存在
+            has_number_column = number_name and number_name in df.columns
             
             # 只保留必要的字段
             columns_to_keep = ['nameid']
@@ -156,8 +177,13 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
             if has_bid_column:
                 columns_to_keep.append(bid_name)
                 print(f"文件包含{bid_name}字段，将正常导入")
-            else:
-                print(f"文件不包含{bid_name}字段，将设置{bid_name}=0")
+            
+            # 添加number_name字段（如果存在）
+            if has_number_column:
+                columns_to_keep.append(number_name)
+                print(f"文件包含{number_name}字段，将执行相加更新")
+            elif number_name:
+                print(f"文件不包含{number_name}字段，将跳过该字段的处理")
             
             # 只选择存在的列
             df = df[columns_to_keep]
@@ -188,14 +214,23 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
                         record[bid_name] = 0
                     else:
                         record[bid_name] = bid_value
-                else:
-                    # 如果没有bid_name列，设置为0
-                    record[bid_name] = 0
+                
+                # 处理number_name字段
+                if has_number_column:
+                    number_value = row[number_name]
+                    if pd.isna(number_value) or str(number_value).lower() in ['n/a', 'na', 'none']:
+                        record[number_name] = 0
+                    else:
+                        # 确保number_name字段值为数字
+                        try:
+                            record[number_name] = float(number_value)
+                        except (ValueError, TypeError):
+                            record[number_name] = 0
                 
                 records.append(record)
             
             # 智能插入/更新数据
-            result = smart_upsert_to_mongodb(collection, records, bid_name)
+            result = smart_upsert_to_mongodb(collection, records, bid_name, number_name)
             
             if result:
                 total_inserted += result.inserted_count
@@ -203,11 +238,20 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
                 print(f"文件 {excel_file} 处理完成: 插入 {result.inserted_count} 条, 更新 {result.modified_count} 条")
         
         # 确保所有记录的bid_name字段不为null，而是0
-        print(f"确保所有记录的{bid_name}字段不为null...")
-        collection.update_many(
-            {bid_name: None},
-            {"$set": {bid_name: 0}}
-        )
+        if bid_name:
+            print(f"确保所有记录的{bid_name}字段不为null...")
+            collection.update_many(
+                {bid_name: None},
+                {"$set": {bid_name: 0}}
+            )
+        
+        # 确保所有记录的number_name字段不为null，而是0
+        if number_name:
+            print(f"确保所有记录的{number_name}字段不为null...")
+            collection.update_many(
+                {number_name: None},
+                {"$set": {number_name: 0}}
+            )
         
         # 验证最终结果
         final_count = collection.count_documents({})
@@ -220,7 +264,10 @@ def import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name='pri
         print("\n前5条记录预览:")
         for doc in collection.find().limit(5):
             print(f"nameid: {doc.get('nameid')}, 名称: {doc.get('name', '')}")
-            print(f"  {bid_name}: {doc.get(bid_name, 0)}")
+            if bid_name:
+                print(f"  {bid_name}: {doc.get(bid_name, 0)}")
+            if number_name:
+                print(f"  {number_name}: {doc.get(number_name, 0)}")
         
         client.close()
         return True
@@ -244,7 +291,8 @@ def main():
     parser.add_argument('excel_file', nargs='?', default='test.xlsx', help='要导入的Excel文件路径（默认: test.xlsx）')
     parser.add_argument('--db', default='foooodata', help='MongoDB数据库名称(默认: foooodata)')
     parser.add_argument('--collection', default='constprice', help='MongoDB集合名称(默认: constprice)')
-    parser.add_argument('--bid_name', required=True, help='要导入的投标价格字段名称（必须提供）')
+    parser.add_argument('--bid_name', help='要导入的投标价格字段名称（可选）')
+    parser.add_argument('--number_name', help='要导入的数值字段名称（支持相加更新）')
     
     # 解析命令行参数
     args = parser.parse_args()
@@ -254,6 +302,7 @@ def main():
     collection_name = args.collection
     excel_file = args.excel_file
     bid_name = args.bid_name
+    number_name = args.number_name
     
     # 确定要导入的Excel文件
     if not os.path.exists(excel_file):
@@ -263,20 +312,37 @@ def main():
     excel_files = [excel_file]
     print(f"开始导入指定文件到MongoDB")
     print(f"要导入的文件: {excel_file}")
-    print(f"要导入的投标价格字段: {bid_name}")
+    if bid_name:
+        print(f"要导入的投标价格字段: {bid_name}")
+    if number_name:
+        print(f"要导入的数值字段(相加更新): {number_name}")
     
     print("=" * 60)
     print("特殊规则:")
     print("1. 以nameid作为唯一键")
     print("2. 如果nameid不存在，插入新记录")
-    print(f"3. 对于{bid_name}字段，只有当数据库中原来的值为0时才更新")
-    print(f"4. 如果数据库中{bid_name}字段已有非零值，则忽略该行的更新")
-    print(f"5. 导入nameid、name(如果存在)、和{bid_name}字段")
-    print("6. 确保所有字段不为null，数值类型为0")
+    rule_count = 2
+    if bid_name:
+        rule_count += 1
+        print(f"{rule_count}. 对于{bid_name}字段，只有当数据库中原来的值为0时才更新")
+        rule_count += 1
+        print(f"{rule_count}. 如果数据库中{bid_name}字段已有非零值，则忽略该行的更新")
+    if number_name:
+        rule_count += 1
+        print(f"{rule_count}. 对于{number_name}字段，执行相加更新操作")
+    rule_count += 1
+    fields_text = "nameid、name(如果存在)"
+    if bid_name:
+        fields_text += f"、和{bid_name}字段"
+    if number_name:
+        fields_text += f"、{number_name}字段"
+    print(f"{rule_count}. 导入{fields_text}")
+    rule_count += 1
+    print(f"{rule_count}. 确保所有字段不为null，数值类型为0")
     print("=" * 60)
     
     # 执行导入
-    success = import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name)
+    success = import_excel_to_mongodb(excel_files, db_name, collection_name, bid_name, number_name)
     
     if success:
         print("\n" + "=" * 60)
